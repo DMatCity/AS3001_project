@@ -1,32 +1,33 @@
 from tensorflow import keras
+import tensorflow as tf
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import os
 
-def save_fig(fig_id, Images_path, tight_layout=True, fig_extension="png", resolution=300):
+def save_fig(fig_id, Images_path, tight_layout=False, fig_extension="pdf", resolution=300):
     path = os.path.join(Images_path, fig_id + "." + fig_extension)
     print("Saving figure", fig_id)
     if tight_layout:
         plt.tight_layout()
     plt.savefig(path, format=fig_extension, dpi=resolution)
 
-def plot_series(series, n_steps, y=None, y_pred=None, x_label="$t$", y_label="$x(t)$", legend=True):
-    plt.plot(series, ".-")
+def plot_series(series, n_steps, y=None, y_pred=None, x_label="Trading Days", y_label="Closing Price", legend=True):
+    plt.plot(series,".-",color='steelblue')
     if y is not None:
-        plt.plot(n_steps, y, "bo", label="Target")
+        plt.plot(n_steps, y, ".-",color='lightskyblue', label="Target")
     if y_pred is not None:
-        plt.plot(n_steps, y_pred, "rx", markersize=10, label="Prediction")
+        plt.plot(n_steps, y_pred, "x-",color='orange', markersize=5, label="Prediction")
     plt.grid(True)
     if x_label:
-        plt.xlabel(x_label, fontsize=16)
+        plt.xlabel(x_label, fontsize=10)
     if y_label:
-        plt.ylabel(y_label, fontsize=16, rotation=0)
+        plt.ylabel(y_label, fontsize=10)
     plt.hlines(0, 0, 100, linewidth=1)
     plt.axis([0, n_steps + 1, 0, 1])
     if legend and (y or y_pred):
-        plt.legend(fontsize=14, loc="upper left")
+        plt.legend(fontsize=10, loc="upper left")
 
 def plot_learning_curves(loss, val_loss):
     plt.plot(np.arange(len(loss)) + 0.5, loss, "b.-", label="Training loss")
@@ -42,8 +43,8 @@ def plot_multiple_forecasts(X, Y, Y_pred):
     n_steps = X.shape[1]
     ahead = Y.shape[1]
     plot_series(X[0, :, 0], n_steps)
-    plt.plot(np.arange(n_steps, n_steps + ahead), Y[0, :, 0], "bo-", label="Actual")
-    plt.plot(np.arange(n_steps, n_steps + ahead), Y_pred[0, :, 0], "rx-", label="Forecast", markersize=10)
+    plt.plot(np.arange(n_steps, n_steps + ahead), Y[0, :, 0], ".-",color='lightskyblue', label="Actual")
+    plt.plot(np.arange(n_steps, n_steps + ahead), Y_pred[0, :, 0], "x-",color='orange', label="Forecast", markersize=5)
     plt.axis([n_steps - 5, n_steps + ahead, 0, 200])
     plt.legend(fontsize=10)
 
@@ -64,10 +65,10 @@ def create_sets_vector(db_scaled, n_steps, t_steps):
     len_val = int(5/6 * len_set)
     len_test = len_set - 1
 
-    X_train, Y_train = new_series[:len_train, :n_steps], new_series[:len_train,n_steps:-1]
-    X_val, Y_val = new_series[len_train:len_val, :n_steps], new_series[len_train:len_val, n_steps:-1]
-    X_test, Y_test = new_series[len_val:len_test, :n_steps], new_series[len_val:len_test, n_steps:-1]
-    X_new, Y_new = new_series[-1:,:n_steps], new_series[len_test:,n_steps:-1]
+    X_train, Y_train = new_series[:len_train, :n_steps], new_series[:len_train,-t_steps:-1,0]
+    X_val, Y_val = new_series[len_train:len_val, :n_steps], new_series[len_train:len_val, -t_steps:,0]
+    X_test, Y_test = new_series[len_val:len_test, :n_steps], new_series[len_val:len_test, -t_steps:,0]
+    X_new, Y_new = new_series[-1:,:n_steps], new_series[len_test:,-t_steps:,0]
     
     return X_train, Y_train, X_val, Y_val, X_test, Y_test, X_new, Y_new
 
@@ -118,6 +119,16 @@ class MCDropout(keras.layers.Dropout):
     def call(self, inputs):
         return super().call(inputs, training=True)
     
+    def get_config(self):
+        return {
+        'rate': self.rate,
+        'noise_shape': self.noise_shape,
+        'seed': self.seed
+         }
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 class GatedActivationUnit(keras.layers.Layer):
     def __init__(self, activation="tanh", **kwargs):
