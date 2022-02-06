@@ -1,4 +1,5 @@
 from tensorflow import keras
+from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
 import numpy as np
 import pandas as pd
@@ -39,12 +40,32 @@ def plot_learning_curves(loss, val_loss):
     plt.ylabel("Loss")
     plt.grid(True)
 
-def plot_multiple_forecasts(X, Y, Y_pred):
+def plot_multiple_forecasts_3D(X, Y, Y_pred):
     n_steps = X.shape[1]
     ahead = Y.shape[1]
     plot_series(X[0, :, 0], n_steps)
     plt.plot(np.arange(n_steps, n_steps + ahead), Y[0, :, 0], ".-",color='lightskyblue', label="Actual")
     plt.plot(np.arange(n_steps, n_steps + ahead), Y_pred[0, :, 0], "x-",color='orange', label="Forecast", markersize=5)
+    plt.axis([n_steps - 5, n_steps + ahead, 0, 200])
+    plt.legend(fontsize=10)
+
+def plot_multiple_forecasts_3D_test(X, Y, Y_pred):
+    n_steps = X.shape[1]
+    ahead = Y.shape[2]
+    iterations = [0,60,120,180]
+    plot_series(X[0, :, 0], n_steps)
+    for i in iterations:
+        plt.plot(np.arange(n_steps + i, n_steps + ahead + i), Y[i, -1, :], ".-",color='lightskyblue', label="Actual")
+        plt.plot(np.arange(n_steps + i, n_steps + ahead + i), Y_pred[i, :, :], "x-",color='orange', label="Forecast", markersize=5)
+    plt.axis([n_steps - 5, 500, 0, 2])
+    plt.legend(fontsize=10)
+
+def plot_multiple_forecasts_2D(X, Y, Y_pred):
+    n_steps = X.shape[1]
+    ahead = Y.shape[1]
+    plot_series(X[0, :], n_steps)
+    plt.plot(np.arange(n_steps, n_steps + ahead), Y[0, :], ".-",color='lightskyblue', label="Actual")
+    plt.plot(np.arange(n_steps, n_steps + ahead), Y_pred[0, :], "x-",color='orange', label="Forecast", markersize=5)
     plt.axis([n_steps - 5, n_steps + ahead, 0, 200])
     plt.legend(fontsize=10)
 
@@ -71,6 +92,86 @@ def create_sets_vector(db_scaled, n_steps, t_steps):
     X_new, Y_new = new_series[-1:,:n_steps], new_series[len_test:,-t_steps:,0]
     
     return X_train, Y_train, X_val, Y_val, X_test, Y_test, X_new, Y_new
+
+def split_set(db):
+    len_set = len(db)
+    len_train = int(2/3 * len_set)
+    len_val = int(5/6 * len_set)
+
+    train, val, test = db[:len_train], db[len_train:len_val], db[len_val:]
+    train = np.array(train).reshape(-1,1)
+    val = np.array(val).reshape(-1,1)
+    test = np.array(test).reshape(-1,1)
+    return train, val, test
+
+def preprocess_data(db_scaled,n_steps,t_steps):
+    new_series = []
+    for row in range(len(db_scaled)-n_steps-t_steps+1):
+        ser = db_scaled[row:row+n_steps+t_steps]
+        new_series.append(ser)
+    
+    new_series = np.array(new_series)
+    new_series = new_series.reshape(new_series.shape[0], new_series.shape[1], 1)
+
+    len_set = len(new_series)
+
+    Y = np.empty((len_set, n_steps, t_steps))
+    for step_ahead in range(1, t_steps + 1):
+        Y[ : , : ,step_ahead - 1] = new_series[ : , step_ahead:step_ahead + n_steps, 0]
+        
+    X = new_series[:,:n_steps]
+
+    return  X, Y
+
+def create_sets_sequence_sc(db, n_steps, t_steps):
+    
+    len_set = len(db)
+    len_train = int(2/3 * len_set)
+    len_val = int(5/6 * len_set)
+    len_test = len_set
+
+    print(len_set)
+    print(len_train)
+    print(len_val)
+    print(len_test)
+
+    train = db[:len_train]
+    val = db[len_train:len_val]
+    test = db[len_val:len_test]
+
+    scaler = MinMaxScaler()
+    train = scaler.fit_transform(train)
+    val = scaler.transform(val)
+    test = scaler.transform(test)
+
+    #train, mean_train, std_train = transf_data(train)
+    #val, mean_val, std_val = transf_data(val)
+    #test, mean_test, std_test = transf_data(test)
+    
+    def preprocess_data(db_scaled):
+        new_series = []
+        for row in range(len(db_scaled)-n_steps-t_steps+1):
+            ser = db_scaled[row:row+n_steps+t_steps]
+            new_series.append(ser)
+    
+        new_series = np.array(new_series)
+        new_series = new_series.reshape(new_series.shape[0], new_series.shape[1], 1)
+
+        len_set = len(new_series)
+
+        Y = np.empty((len_set, n_steps, t_steps))
+        for step_ahead in range(1, t_steps + 1):
+            Y[ : , : ,step_ahead - 1] = new_series[ : , step_ahead:step_ahead + n_steps, 0]
+        
+        X = new_series[:,:n_steps]
+
+        return  X, Y
+
+    X_train, Y_train = preprocess_data(train)
+    X_val, Y_val = preprocess_data(val)
+    X_test, Y_test = preprocess_data(test)
+    
+    return X_train, Y_train, X_val, Y_val, X_test, Y_test, #mean_test, #std_test
 
 def create_sets_sequence(db_scaled, n_steps, t_steps):
     new_series = []
@@ -107,13 +208,30 @@ def read_data(file_input):
     return db
 
 def transf_data(db):
-    db = np.log(db) / np.array(10)
-    return db
+    #db = np.log(db) / np.array(10)
+    #return db
+    db = np.log(db)
+    mean_db = np.mean(db)
+    std_db = np.std(db)
+    new_db = (db - np.array(mean_db)) / np.array(std_db)
 
-def inv_tranf_data(output):
-    output = np.array(10) * output
+    return new_db, mean_db, std_db
+
+def inv_tranf_data(output, mean_db, std_db):
+    #output = np.array(10) * output
+    #output = np.exp(output)
+    #return output
+
+    output = output * np.array(std_db)
+    output = output + mean_db
     output = np.exp(output)
+
     return output
+
+def inv_tranf_data_sc(output, mean_db, std_db):
+    
+    
+    pass
 
 class MCDropout(keras.layers.Dropout):
     def call(self, inputs):
