@@ -63,6 +63,7 @@ for i in range(len(input_files)):
     # Create a histogram to inspect the distribution of the data
     pd.DataFrame(db).plot(kind='density', legend=False, color='grey')
     plt.hist(db, density=True, color='lightgrey')
+    plt.title('Histogram before Logarithmic Transformation of {}'.format(files[i]))
     save_fig('Histogram before Logarithmic Transformation of {}'.format(files[i]), IMAGES_PATH)
     plt.clf()
 
@@ -79,6 +80,7 @@ for i in range(len(input_files)):
     # Create a histrogram to inspect the distribution of the log transformed data
     pd.DataFrame(db_log).plot(kind='density', legend=False, color='grey')
     plt.hist(db_log, density=True, color='lightgrey')
+    plt.title('Histogram after Logarithmic Transformation of {}'.format(files[i]))
     save_fig('Histogram after Logarithmic Transformation of {}'.format(files[i]), IMAGES_PATH)
     plt.clf()
 
@@ -109,36 +111,44 @@ for i in range(len(input_files)):
     X_val, Y_val = preprocess_data(val,n_steps=n_steps, t_steps=t_steps)
     X_test, Y_test = preprocess_data(test,n_steps=n_steps, t_steps=t_steps)
 
-    # Create Linear Regression Model as a baseline model to benchmark the performance of the others models
+        # Create Linear Regression Model as a baseline model to benchmark the performance of the others models
     X = np.array(range(1,n_steps + t_steps + 1))
     X = X.reshape(-1, 1)
-    y = scaler.transform(np.array(db_log).reshape(-1,1))
-    
+
     regr = linear_model.LinearRegression()
     mse = []
-    for j in range(len(db_log) - n_steps-t_steps):
-    
-        regr.fit(X[:n_steps], y[j:j + n_steps])
+    for j in range(len(val) - n_steps-t_steps):
+
+        regr.fit(X[:n_steps], val[j:j + n_steps])
         y_predict = regr.predict(X[-t_steps:])
 
-        metrics = mean_squared_error(y[j+n_steps:j+n_steps + t_steps],y_predict)
+        metrics = mean_squared_error(val[j+n_steps:j+n_steps + t_steps],y_predict)
         mse.append(metrics)
 
     average_mse = sum(mse)/len(mse)
-
     df_output_val.loc[files[i],'Linear Regr'] = average_mse
-    df_output_test.loc[files[i],'Linear Regr'] = average_mse
-    print(df_output_val, df_output_test)
 
-    y = scaler.inverse_transform(y)
-    y = np.exp(y)
+    for j in range(len(test) - n_steps-t_steps):
+
+        regr.fit(X[:n_steps], test[j:j + n_steps])
+        y_predict = regr.predict(X[-t_steps:])
+
+        metrics = mean_squared_error(test[j+n_steps:j+n_steps + t_steps],y_predict)
+        mse.append(metrics)
+
+    average_mse = sum(mse)/len(mse)
+    df_output_test.loc[files[i],'Linear Regr'] = average_mse
+
+    test = scaler.inverse_transform(test)
+    test = np.exp(test)
     y_predict = scaler.inverse_transform(y_predict)
     y_predict = np.exp(y_predict)
     plot_series(X[-n_steps-t_steps:], n_steps)
-    plt.plot(np.arange(n_steps + t_steps), y[-n_steps-t_steps:], ".-",color='lightskyblue', label="Actual")
+    plt.plot(np.arange(n_steps + t_steps), test[-n_steps-t_steps:], ".-",color='lightskyblue', label="Actual")
     plt.plot(np.arange(n_steps, n_steps + t_steps), y_predict, "x-",color='orange', label="Forecast", markersize=5)
     plt.axis([n_steps - 5, n_steps + t_steps, 0, 200])
     plt.legend(fontsize=10)
+    plt.title('Linear Regression {}'.format(files[i]))
     save_fig('Linear Regression {}'.format(files[i]), IMAGES_PATH)
     plt.clf()
 
@@ -247,6 +257,7 @@ for i in range(len(input_files)):
 
     # Visualise a predicition sequence
     plot_multiple_forecasts_2D(X_plot, Y_plot, y_pred)
+    plt.title('LSTM Forecast {}'.format(files[i]))
     save_fig('LSTM Forecast {}'.format(files[i]),IMAGES_PATH)
     plt.clf()
 
@@ -346,6 +357,7 @@ for i in range(len(input_files)):
     X_plot = np.exp(X_plot)
 
     plot_multiple_forecasts_2D(X_plot, Y_plot, y_pred)
+    plt.title('CNN-LSTM Forecast {}'.format(files[i]))
     save_fig('CNN-LSTM Forecast {}'.format(files[i]),IMAGES_PATH)
     plt.clf()
 
@@ -443,6 +455,7 @@ for i in range(len(input_files)):
     X_plot = np.exp(X_plot)
 
     plot_multiple_forecasts_2D(X_plot, Y_plot, y_pred)
+    plt.title('WaveNet not Original {}'.format(files[i]))
     save_fig('WaveNet not Original {}'.format(files[i]),IMAGES_PATH)
     plt.clf()
 
